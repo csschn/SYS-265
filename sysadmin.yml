@@ -1,0 +1,64 @@
+- name: Sync Time on Windows Servers
+  win_ntp:
+    state: present
+    server: time.windows.com
+  when: "'windows' in group_names"
+
+- name: Sync Time on Rocky Linux Servers
+  ansible.builtin.yum:
+    name: chrony
+    state: present
+  when: "'rocky' in group_names"
+
+- name: Enable and Start Chrony Service
+  ansible.builtin.service:
+    name: chronyd
+    state: started
+    enabled: yes
+  when: "'rocky' in group_names"
+
+- name: Force Time Synchronization on Windows
+  ansible.windows.win_shell: w32tm /resync
+  when: "'windows' in group_names"
+
+- name: Verify Time Synchronization
+  ansible.builtin.command: date
+  register: time_output
+
+- name: Debug Time Output
+  ansible.builtin.debug:
+    msg: "Current system time: {{ time_output.stdout }}"
+
+- name: Create Admin User on Windows Servers
+  ansible.windows.win_user:
+    name: ansibleadmin
+    password: "{{ testPassword }}"
+    state: present
+    groups: Administrators
+    password_never_expires: yes
+    user_cannot_change_password: yes
+  when: "'windows' in group_names"
+
+- name: Create Admin User on Rocky Linux Servers
+  ansible.builtin.user:
+    name: ansibleadmin
+    password: "{{ testPassword | password_hash('sha512') }}"
+    state: present
+    groups: wheel
+    append: yes
+    create_home: yes
+    shell: /bin/bash
+  when: "'rocky' in group_names"
+
+- name: Ensure sudoers entry for ansibleadmin
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/ansibleadmin
+    line: "ansibleadmin ALL=(ALL) NOPASSWD: ALL"
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  when: "'rocky' in group_names"
+
+- name: Debug User Creation Output
+  ansible.builtin.debug:
+    msg: "Admin user 'ansibleadmin' has been created successfully on {{ inventory_hostname }}"
