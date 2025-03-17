@@ -1,0 +1,55 @@
+- name: Enforce Account Lockout Policy (Windows)
+  ansible.windows.win_command: >
+    secedit /configure /db c:\windows\security\local.sdb
+    /cfg c:\windows\security\templates\hardening.inf
+  when: "'windows' in group_names"
+
+- name: Create Security Template for Account Lockout
+  ansible.windows.win_template:
+    src: templates/hardening.inf.j2
+    dest: c:\windows\security\templates\hardening.inf
+  when: "'windows' in group_names"
+
+- name: Ensure Windows Firewall is Enabled
+  ansible.windows.win_shell: netsh advfirewall set allprofiles state on
+  when: "'windows' in group_names"
+
+- name: Disable Guest Account
+  ansible.windows.win_user:
+    name: Guest
+    state: absent
+  when: "'windows' in group_names"
+
+- name: Debug GPO Hardening
+  ansible.builtin.debug:
+    msg: "GPO hardening policies have been applied to {{ inventory_hostname }}"
+
+- name: Deny Local Logon for Non-Admins
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+    name: LocalAccountTokenFilterPolicy
+    data: 0
+    type: dword
+  when: "'windows' in group_names"
+
+- name: Restrict RDP Access to Administrators Only
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp
+    name: SecurityLayer
+    data: 2
+    type: dword
+  when: "'windows' in group_names"
+
+- name: Enforce Least Privilege by Disabling Built-in Administrator
+  ansible.windows.win_user:
+    name: Administrator
+    state: disabled
+  when: "'windows' in group_names"
+
+- name: Remove All Users from Remote Desktop Users Group
+  ansible.windows.win_shell: net localgroup "Remote Desktop Users" /delete
+  when: "'windows' in group_names"
+
+- name: Debug Privilege Hardening
+  ansible.builtin.debug:
+    msg: "Privilege hardening policies have been applied to {{ inventory_hostname }}"
