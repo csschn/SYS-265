@@ -1,0 +1,76 @@
+- name: Remove Unnecessary Local Administrators on Windows
+  ansible.windows.win_group_membership:
+    name: Administrators
+    members:
+      - "Domain Admins"
+    state: present
+  when: "'windows' in group_names"
+
+- name: Remove Unauthorized Users from Windows Administrators Group
+  ansible.windows.win_group_membership:
+    name: Administrators
+    members:
+      - "ansibleadmin"
+    state: exact
+  when: "'windows' in group_names"
+
+- name: Remove Unnecessary Root Privileges on Rocky Linux
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: ""
+    append: no
+  loop:
+    - testuser
+    - tempadmin
+  ignore_errors: yes
+  when: "'rocky' in group_names"
+
+- name: Ensure Only Approved Users Have sudo Privileges
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/restricted_admins
+    line: "{{ item }} ALL=(ALL) !ALL"
+    create: yes
+    mode: '0440'
+    validate: 'visudo -cf %s'
+  loop:
+    - testuser
+    - tempadmin
+  when: "'rocky' in group_names"
+
+- name: Debug Local Admin Restriction
+  ansible.builtin.debug:
+    msg: "Local administrator access has been restricted on {{ inventory_hostname }}"
+
+- name: Disable SMBv1 on Windows
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters
+    name: SMB1
+    data: 0
+    type: dword
+  when: "'windows' in group_names"
+
+- name: Disable LLMNR on Windows
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient
+    name: EnableMulticast
+    data: 0
+    type: dword
+  when: "'windows' in group_names"
+
+- name: Disable IPv6 on Rocky Linux
+  ansible.builtin.lineinfile:
+    path: /etc/sysctl.conf
+    line: "{{ item }}"
+    create: yes
+  loop:
+    - "net.ipv6.conf.all.disable_ipv6 = 1"
+    - "net.ipv6.conf.default.disable_ipv6 = 1"
+  when: "'rocky' in group_names"
+
+- name: Apply sysctl settings
+  ansible.builtin.command: sysctl -p
+  when: "'rocky' in group_names"
+
+- name: Debug Network Protocol Restrictions
+  ansible.builtin.debug:
+    msg: "Unnecessary network protocols have been disabled on {{ inventory_hostname }}"
