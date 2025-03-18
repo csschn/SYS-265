@@ -1,6 +1,5 @@
 - name: Apply GPO and Privilege Hardening Policies
   hosts: windows
-  become: yes
   tasks:
 
     # ------------------------------
